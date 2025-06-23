@@ -23,14 +23,17 @@ export interface Album {
   isLiked?: boolean;
 }
 
+// src/types/index.ts
 export interface Track {
   id: string;
   name: string;
   trackNumber: number;
-  duration: number; // en millisecondes
+  duration: number;
   previewUrl: string | null;
   artists: string[];
   explicit: boolean;
+  spotifyUrl?: string;
+  youtubeSearchUrl?: string;
 }
 
 export interface UserStats {

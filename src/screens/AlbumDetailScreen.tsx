@@ -1,6 +1,6 @@
 // src/screens/AlbumDetailScreen.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,6 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Colors } from '../constants/colors';
 import { Album, Track } from '../types';
 import { SpotifyService } from '../services/spotify.service';
@@ -38,31 +37,13 @@ export default function AlbumDetailScreen({
 }: AlbumDetailScreenProps) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
-  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const playbackStatusUpdateRef = useRef<((status: AVPlaybackStatus) => void) | undefined>(undefined);
+  // 🆕 États pour les nouvelles fonctionnalités
+  const [showInfo, setShowInfo] = useState(false);
+  const [userRating, setUserRating] = useState<'like' | 'dislike' | null>(null);
 
   useEffect(() => {
     loadTracks();
-    
-    // Configuration audio
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    });
-
-    return () => {
-      // Cleanup audio on unmount
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-    };
   }, [album.id]);
 
   const loadTracks = async () => {
@@ -84,83 +65,23 @@ export default function AlbumDetailScreen({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const playTrack = async (track: Track) => {
-    if (!track.previewUrl) {
-      Alert.alert('Aperçu non disponible', 'Aucun aperçu disponible pour ce morceau');
-      return;
-    }
-
-    try {
-      // Stop current sound if playing
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-
-      // Create and load new sound
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: track.previewUrl },
-        { shouldPlay: true },
-        onPlaybackStatusUpdate
-      );
-
-      soundRef.current = sound;
-      setPlayingTrackId(track.id);
-      setIsPlaying(true);
-    } catch (error) {
-      console.error('Erreur lecture:', error);
-      Alert.alert('Erreur', 'Impossible de lire ce morceau');
-    }
+  // 🆕 Calculer la durée totale de l'album
+  const getTotalDuration = () => {
+    const totalMs = tracks.reduce((total, track) => total + track.duration, 0);
+    const totalMinutes = Math.floor(totalMs / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return hours > 0 ? `${hours}h ${minutes}min` : `${minutes} min`;
   };
 
-  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      setCurrentTime(status.positionMillis);
-      setDuration(status.durationMillis || 0);
-      setIsPlaying(status.isPlaying);
-
-      if (status.didJustFinish) {
-        setPlayingTrackId(null);
-        setIsPlaying(false);
-        setCurrentTime(0);
-      }
-    }
+  // 🆕 Gestion du système de notation
+  const handleRating = (rating: 'like' | 'dislike') => {
+    setUserRating(prev => prev === rating ? null : rating);
+    // Ici vous pouvez sauvegarder le rating dans votre système de stockage
+    console.log(`Rating pour ${album.title}:`, rating);
   };
 
-  const togglePlayPause = async () => {
-    if (!soundRef.current) return;
-
-    if (isPlaying) {
-      await soundRef.current.pauseAsync();
-    } else {
-      await soundRef.current.playAsync();
-    }
-  };
-
-  const stopPlayback = async () => {
-    if (soundRef.current) {
-      await soundRef.current.stopAsync();
-      await soundRef.current.unloadAsync();
-      soundRef.current = null;
-      setPlayingTrackId(null);
-      setIsPlaying(false);
-      setCurrentTime(0);
-    }
-  };
-
-  const openInSpotify = async () => {
-    try {
-      const supported = await Linking.canOpenURL(album.spotifyUrl);
-      if (supported) {
-        await Linking.openURL(album.spotifyUrl);
-      } else {
-        Alert.alert('Spotify', 'Impossible d\'ouvrir Spotify');
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible d\'ouvrir le lien');
-    }
-  };
-
+  // 🆕 Redirection vers YouTube pour l'album entier
   const openYouTube = async () => {
     if (!album.youtubeUrl) return;
     
@@ -173,6 +94,44 @@ export default function AlbumDetailScreen({
       }
     } catch (error) {
       Alert.alert('Erreur', 'Impossible d\'ouvrir le lien');
+    }
+  };
+
+  // 🆕 Redirection vers Spotify pour une piste spécifique
+  const openTrackInSpotify = async (track: Track) => {
+    try {
+      // Essayer l'app Spotify d'abord
+      const spotifyApp = `spotify:track:${track.id}`;
+      const canOpen = await Linking.canOpenURL(spotifyApp);
+      
+      if (canOpen) {
+        await Linking.openURL(spotifyApp);
+        console.log('🎵 Ouverture track dans l\'app Spotify');
+      } else {
+        await Linking.openURL(track.spotifyUrl || `https://open.spotify.com/track/${track.id}`);
+        console.log('🌐 Ouverture track Spotify dans le navigateur');
+      }
+    } catch (error) {
+      console.error('❌ Erreur ouverture track Spotify:', error);
+      Alert.alert('Erreur', 'Impossible d\'ouvrir cette piste dans Spotify');
+    }
+  };
+
+  // 🆕 Redirection vers YouTube pour une piste spécifique
+  const openTrackInYouTube = async (track: Track) => {
+    try {
+      if (track.youtubeSearchUrl) {
+        await Linking.openURL(track.youtubeSearchUrl);
+        console.log('🎥 Recherche YouTube pour:', track.name);
+      } else {
+        // Fallback si pas d'URL générée
+        const searchQuery = encodeURIComponent(`${track.name} ${track.artists.join(' ')}`);
+        const youtubeUrl = `https://www.youtube.com/results?search_query=${searchQuery}`;
+        await Linking.openURL(youtubeUrl);
+      }
+    } catch (error) {
+      console.error('❌ Erreur ouverture track YouTube:', error);
+      Alert.alert('Erreur', 'Impossible d\'ouvrir cette piste dans YouTube');
     }
   };
 
@@ -205,47 +164,85 @@ export default function AlbumDetailScreen({
           <View style={styles.albumMeta}>
             <Text style={styles.albumDate}>{formatReleaseDate(album.releaseDate)}</Text>
           </View>
-          
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={openInSpotify}>
-              <Ionicons name="musical-notes" size={20} color="#1DB954" />
-              <Text style={styles.actionButtonText}>Spotify</Text>
-            </TouchableOpacity>
-            {album.youtubeUrl && (
-              <TouchableOpacity style={styles.actionButton} onPress={openYouTube}>
-                <Ionicons name="play-circle" size={20} color="#FF0000" />
-                <Text style={styles.actionButtonText}>YouTube</Text>
-              </TouchableOpacity>
-            )}
-          </View>
         </View>
 
-        {/* Player Control (if track is playing) */}
-        {playingTrackId && (
-          <View style={styles.playerControl}>
-            <View style={styles.playerInfo}>
-              <Text style={styles.playerTrackName} numberOfLines={1}>
-                {tracks.find(t => t.id === playingTrackId)?.name}
-              </Text>
-              <Text style={styles.playerTime}>
-                {formatDuration(currentTime)} / {formatDuration(duration)}
-              </Text>
+        {/* 🆕 Section Informations sur l'album */}
+        <View style={styles.infoSection}>
+          <TouchableOpacity 
+            style={styles.infoToggle}
+            onPress={() => setShowInfo(!showInfo)}
+          >
+            <Text style={styles.infoToggleText}>Informations sur l'album</Text>
+            <Ionicons 
+              name={showInfo ? "chevron-up" : "chevron-down"} 
+              size={20} 
+              color={Colors.text} 
+            />
+          </TouchableOpacity>
+
+          {showInfo && (
+            <View style={styles.infoDetails}>
+              <View style={styles.infoRow}>
+                <Ionicons name="calendar-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.infoLabel}>Sortie :</Text>
+                <Text style={styles.infoValue}>
+                  {new Date(album.releaseDate).toLocaleDateString('fr-FR')}
+                </Text>
+              </View>
+              
+              <View style={styles.infoRow}>
+                <Ionicons name="musical-notes-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.infoLabel}>Morceaux :</Text>
+                <Text style={styles.infoValue}>{tracks.length} titres</Text>
+              </View>
+              
+              <View style={styles.infoRow}>
+                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.infoLabel}>Durée :</Text>
+                <Text style={styles.infoValue}>{getTotalDuration()}</Text>
+              </View>
+              
+              {album.youtubeUrl && (
+                <TouchableOpacity style={styles.youtubeButton} onPress={openYouTube}>
+                  <Ionicons name="logo-youtube" size={20} color="#FF0000" />
+                  <Text style={styles.youtubeButtonText}>Écouter sur YouTube</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={styles.playerButtons}>
-              <TouchableOpacity onPress={togglePlayPause} style={styles.playButton}>
-                <Ionicons 
-                  name={isPlaying ? "pause" : "play"} 
-                  size={24} 
-                  color={Colors.text} 
-                />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={stopPlayback} style={styles.stopButton}>
-                <Ionicons name="stop" size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+          )}
+        </View>
+
+        {/* 🆕 Système de notation */}
+        <View style={styles.ratingSection}>
+          <Text style={styles.ratingTitle}>Votre avis sur cet album ?</Text>
+          <View style={styles.ratingButtons}>
+            <TouchableOpacity
+              style={[
+                styles.ratingButton,
+                userRating === 'like' && styles.ratingButtonActive
+              ]}
+              onPress={() => handleRating('like')}
+            >
+              <Text style={styles.ratingEmoji}>👍🏾</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.ratingButton,
+                userRating === 'dislike' && styles.ratingButtonActive
+              ]}
+              onPress={() => handleRating('dislike')}
+            >
+              <Text style={styles.ratingEmoji}>👎🏾</Text>
+            </TouchableOpacity>
           </View>
-        )}
+          
+          {userRating && (
+            <Text style={styles.ratingFeedback}>
+              {userRating === 'like' ? '✨ Vous aimez cet album !' : '😕 Vous n\'aimez pas cet album'}
+            </Text>
+          )}
+        </View>
 
         {/* Tracks List */}
         <View style={styles.tracksSection}>
@@ -257,54 +254,51 @@ export default function AlbumDetailScreen({
             <ActivityIndicator size="small" color={Colors.primary} style={styles.loader} />
           ) : (
             tracks.map((track) => (
-              <TouchableOpacity
-                key={track.id}
-                style={[
-                  styles.trackItem,
-                  playingTrackId === track.id && styles.trackItemActive
-                ]}
-                onPress={() => playTrack(track)}
-                disabled={!track.previewUrl}
-              >
-                <View style={styles.trackNumber}>
-                  {playingTrackId === track.id && isPlaying ? (
-                    <Ionicons name="volume-high" size={16} color={Colors.primary} />
-                  ) : (
+              <View key={track.id} style={styles.trackItemContainer}>
+                {/* Track principale */}
+                <View style={styles.trackItem}>
+                  <View style={styles.trackNumber}>
                     <Text style={styles.trackNumberText}>{track.trackNumber}</Text>
-                  )}
-                </View>
-                <View style={styles.trackInfo}>
-                  <View style={styles.trackTitleRow}>
-                    <Text style={styles.trackName} numberOfLines={1}>{track.name}</Text>
-                    {track.explicit && (
-                      <View style={styles.explicitBadge}>
-                        <Text style={styles.explicitText}>E</Text>
-                      </View>
-                    )}
                   </View>
-                  <Text style={styles.trackArtists} numberOfLines={1}>
-                    {track.artists.join(', ')}
-                  </Text>
+                  <View style={styles.trackInfo}>
+                    <View style={styles.trackTitleRow}>
+                      <Text style={styles.trackName} numberOfLines={1}>{track.name}</Text>
+                      {track.explicit && (
+                        <View style={styles.explicitBadge}>
+                          <Text style={styles.explicitText}>E</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.trackArtists} numberOfLines={1}>
+                      {track.artists.join(', ')}
+                    </Text>
+                  </View>
+                  <View style={styles.trackRight}>
+                    <Text style={styles.trackDuration}>
+                      {formatDuration(track.duration)}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.trackRight}>
-                  {track.previewUrl ? (
-                    <Ionicons 
-                      name="play-circle-outline" 
-                      size={24} 
-                      color={playingTrackId === track.id ? Colors.primary : Colors.textSecondary} 
-                    />
-                  ) : (
-                    <Ionicons 
-                      name="lock-closed-outline" 
-                      size={16} 
-                      color={Colors.textTertiary} 
-                    />
-                  )}
-                  <Text style={styles.trackDuration}>
-                    {formatDuration(track.duration)}
-                  </Text>
+                
+                {/* 🆕 Boutons de redirection pour chaque track */}
+                <View style={styles.trackActions}>
+                  <TouchableOpacity 
+                    style={styles.trackActionButton}
+                    onPress={() => openTrackInSpotify(track)}
+                  >
+                    <Ionicons name="musical-notes" size={16} color="#1DB954" />
+                    <Text style={styles.trackActionText}>Spotify</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.trackActionButton}
+                    onPress={() => openTrackInYouTube(track)}
+                  >
+                    <Ionicons name="logo-youtube" size={16} color="#FF0000" />
+                    <Text style={styles.trackActionText}>YouTube</Text>
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))
           )}
         </View>
@@ -378,64 +372,125 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.primary,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
+  
+  // 🆕 Styles pour la section d'informations
+  infoSection: {
+    margin: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  actionButton: {
+  infoToggle: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
     backgroundColor: Colors.surfaceLight,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
   },
-  actionButtonText: {
+  infoToggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  infoDetails: {
+    padding: 16,
+    backgroundColor: Colors.surface,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  youtubeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceLight,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  youtubeButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.text,
     marginLeft: 8,
   },
-  playerControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.primary,
-    marginHorizontal: 16,
-    marginVertical: 10,
-    padding: 16,
+
+  // 🆕 Styles pour le système de notation
+  ratingSection: {
+    margin: 16,
+    backgroundColor: Colors.surface,
     borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
   },
-  playerInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  playerTrackName: {
+  ratingTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.text,
-    marginBottom: 4,
+    marginBottom: 16,
+    textAlign: 'center',
   },
-  playerTime: {
-    fontSize: 12,
-    color: Colors.text,
-    opacity: 0.8,
-  },
-  playerButtons: {
+  ratingButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    gap: 32,
+    marginBottom: 12,
   },
-  playButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surface,
+  ratingButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
+    transform: [{ scale: 1 }],
   },
-  stopButton: {
-    padding: 8,
+  ratingButtonActive: {
+    backgroundColor: Colors.primary,
+    transform: [{ scale: 1.1 }],
+    shadowColor: Colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  ratingEmoji: {
+    fontSize: 24,
+  },
+  ratingFeedback: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  trackItemContainer: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  trackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   tracksSection: {
     padding: 16,
@@ -448,20 +503,6 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: 20,
-  },
-  trackItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  trackItemActive: {
-    backgroundColor: Colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: Colors.primary,
   },
   trackNumber: {
     width: 30,
@@ -509,5 +550,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  // 🆕 Styles pour les boutons de redirection
+  trackActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: Colors.surfaceLight,
+    gap: 12,
+  },
+  trackActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+  },
+  trackActionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: Colors.text,
+    marginLeft: 6,
   },
 });

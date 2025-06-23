@@ -117,31 +117,37 @@ export class SpotifyService {
     }
   }
 
-  /**
-   * Récupère les pistes d'un album
-   */
-  static async getAlbumTracks(albumId: string): Promise<Track[]> {
-    try {
-      const token = await this.getAccessToken();
-      
-      const response = await fetch(
-        `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=50`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          }
+ /**
+ * Récupère les pistes d'un album
+ */
+static async getAlbumTracks(albumId: string): Promise<Track[]> {
+  try {
+    const token = await this.getAccessToken();
+    
+    const response = await fetch(
+      `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=50`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         }
-      );
-      
-      if (!response.ok) {
-        throw new Error('Erreur lors de la récupération des pistes');
       }
-      
-      const data = await response.json();
-      
-      if (data.items) {
-        return data.items.map((track: any) => ({
+    );
+    
+    if (!response.ok) {
+      throw new Error('Erreur lors de la récupération des pistes');
+    }
+    
+    const data = await response.json();
+    
+    if (data.items) {
+      return data.items.map((track: any) => {
+        // Créer la recherche YouTube optimisée
+        const youtubeQuery = encodeURIComponent(
+          `${track.name} ${track.artists.map((a: any) => a.name).join(' ')}`
+        );
+        
+        return {
           id: track.id,
           name: track.name,
           trackNumber: track.track_number,
@@ -149,13 +155,17 @@ export class SpotifyService {
           previewUrl: track.preview_url,
           artists: track.artists.map((a: any) => a.name),
           explicit: track.explicit || false,
-        }));
-      }
-      
-      return [];
-    } catch (error) {
-      console.error('❌ Erreur chargement pistes:', error);
-      throw error;
+          // 🆕 URLs pour les redirections
+          spotifyUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
+          youtubeSearchUrl: `https://www.youtube.com/results?search_query=${youtubeQuery}`,
+        };
+      });
     }
+    
+    return [];
+  } catch (error) {
+    console.error('❌ Erreur chargement pistes:', error);
+    throw error;
   }
+}
 }
