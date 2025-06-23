@@ -6,9 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tab, TabKey } from '../types';
 import { Colors } from '../constants/colors';
 
+// 🔄 Ordre modifié : Nouvelles en premier, puis Découvrir
 const TABS: Tab[] = [
-  { key: 'swipe', title: 'Découvrir', icon: 'flash', emoji: '⚡' },
   { key: 'nouvelles', title: 'Nouvelles', icon: 'musical-notes', emoji: '🎵' },
+  { key: 'swipe', title: 'Découvrir', icon: 'flash', emoji: '⚡' },
   { key: 'tendances', title: 'Tendances', icon: 'trending-up', emoji: '📈' },
   { key: 'genres', title: 'Genres', icon: 'grid', emoji: '🎭' },
   { key: 'profil', title: 'Profil', icon: 'person', emoji: '👤' },

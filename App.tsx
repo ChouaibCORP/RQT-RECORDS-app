@@ -28,7 +28,7 @@ import { Album, UserStats, TabKey } from './src/types';
 import { Colors } from './src/constants/colors';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('swipe');
+  const [activeTab, setActiveTab] = useState<TabKey>('nouvelles');
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);

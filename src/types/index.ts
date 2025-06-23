@@ -1,6 +1,7 @@
 // src/types/index.ts
 
-export type TabKey = 'swipe' | 'artistes' | 'nouvelles' | 'profil';
+// 🔧 TabKey avec ordre cohérent : Nouvelles en premier
+export type TabKey = 'nouvelles' | 'swipe' | 'tendances' | 'genres' | 'profil';
 
 export interface Tab {
   key: TabKey;
@@ -23,7 +24,6 @@ export interface Album {
   isLiked?: boolean;
 }
 
-// src/types/index.ts
 export interface Track {
   id: string;
   name: string;
