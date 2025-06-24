@@ -1,19 +1,5 @@
-// src/screens/NewReleasesScreen.tsx
-// INSTALLATION REQUISE: npm install expo-av
-// Pour utiliser les vidéos : expo install expo-av
-
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  RefreshControl,
-  TouchableOpacity,
-  Image,
-  Dimensions,
-  ImageBackground,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Image, Dimensions, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Album } from '../types';
@@ -43,22 +29,25 @@ export default function NewReleasesScreen({
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
   const videoRef = useRef<Video>(null);
 
-  // Durée maximale de chaque pub en millisecondes (20 secondes)
-  const MAX_VIDEO_DURATION = 20 * 1000;
+  // Durée maximale de chaque pub en millisecondes (15 secondes)
+  const MAX_VIDEO_DURATION = 15 * 1000;
 
   const getVideoUrlForAlbum = (album: Album) => {
-  // Vidéo spécifique pour Karol G
-  if (album.artist.some(artist => artist.toLowerCase().includes('karol g'))) {
-    return 'https://drive.google.com/uc?export=download&id=1iIeeTHJwDI6Xxn1ujbbgfKiS01_piOWf';
-  }
-
-  // Vidéo spécifique pour Hamza
-  if (album.artist.some(artist => artist.toLowerCase().includes('hamza'))) {
-    return 'https://drive.google.com/uc?export=download&id=1eQJT4iR9M62P8n6NuZkBXUm05IuMegMA';
-  }
-    
+    // Vidéo spécifique pour Karol G
+    if (album.artist.some(artist => artist.toLowerCase().includes('karol g'))) {
+      return 'https://res.cloudinary.com/dr0atsnqy/video/upload/v1750757556/bas1u40hcbqnupfdnhfc.mp4';
+    }
+    // Vidéo spécifique pour Hamza
+    if (album.artist.some(artist => artist.toLowerCase().includes('hamza'))) {
+      return 'https://res.cloudinary.com/dr0atsnqy/video/upload/v1750757556/t9w0qqc7ns7pzof2j3s3.mp4';
+    }
+    // Vidéo spécifique pour Olamide
+    if (album.artist.some(artist => artist.toLowerCase().includes('olamide'))) {
+      return 'https://res.cloudinary.com/dr0atsnqy/video/upload/v1750759860/yzmz1towfxglua2ogipj.mp4'; 
+    }
     // Vidéos de sample pour les autres artistes
     const sampleVideos = [
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
@@ -66,56 +55,44 @@ export default function NewReleasesScreen({
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
     ];
-    
     // Hash simple basé sur l'ID de l'album pour avoir une vidéo cohérente
     const index = Math.abs(album.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % sampleVideos.length;
     return sampleVideos[index];
   };
 
-  // Albums mis en avant pour la publicité avec URLs vidéo (APRÈS la définition de la fonction)
-  const featuredAlbums = albums.slice(0, 3).map(album => ({
+  // Fonction pour vérifier si un album est de l'un des artistes spécifiés
+  const isFeaturedArtist = (album: Album) => {
+    return album.artist.some(artist =>
+      artist.toLowerCase().includes('hamza') ||
+      artist.toLowerCase().includes('karol g') ||
+      artist.toLowerCase().includes('olamide')
+    );
+  };
+
+  // Filtrer les albums pour inclure uniquement ceux des artistes spécifiés
+  const featuredAlbums = albums.filter(isFeaturedArtist).slice(0, 3).map(album => ({
     ...album,
     videoUrl: getVideoUrlForAlbum(album),
   }));
 
-  // Auto-rotation des bannières toutes les 20 secondes (sauf si interaction manuelle)
-  useEffect(() => {
-    if (featuredAlbums.length > 1) {
-      const interval = setInterval(() => {
-        // Ne change automatiquement que si on a atteint 20 secondes
-        if (totalElapsedTime >= MAX_VIDEO_DURATION) {
-          setCurrentAdIndex((prev) => (prev + 1) % featuredAlbums.length);
-          setVideoCurrentTime(0);
-          setTotalElapsedTime(0);
-        }
-      }, 20000); // 20 secondes par pub
-      return () => clearInterval(interval);
-    }
-  }, [featuredAlbums.length, totalElapsedTime]);
-
-  // Timer pour compter le temps total écoulé (20 secondes par pub)
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    
     if (isVideoPlaying && totalElapsedTime < MAX_VIDEO_DURATION) {
       interval = setInterval(() => {
-        setTotalElapsedTime(prev => {
-          const newTime = prev + 1000;
-          // Passer à la pub suivante après 20 secondes (auto-rotation s'en charge)
-          if (newTime >= MAX_VIDEO_DURATION) {
-            return MAX_VIDEO_DURATION;
-          }
-          return newTime;
-        });
+        setTotalElapsedTime(prev => prev + 1000);
       }, 1000);
     }
-
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [isVideoPlaying, totalElapsedTime]);
 
-  // Fonction pour gérer le statut de lecture de la vidéo
+  useEffect(() => {
+    if (totalElapsedTime >= MAX_VIDEO_DURATION) {
+      goToNextAd();
+    }
+  }, [totalElapsedTime]);
+
   const handleVideoPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
       const currentTimeMs = status.positionMillis || 0;
@@ -123,7 +100,6 @@ export default function NewReleasesScreen({
     }
   };
 
-  // Fonction pour redémarrer la vidéo
   const restartVideo = () => {
     setTotalElapsedTime(0);
     setIsVideoPlaying(true);
@@ -132,12 +108,12 @@ export default function NewReleasesScreen({
     }
   };
 
-  // Fonctions pour naviguer entre les pubs
   const goToNextAd = () => {
     setCurrentAdIndex((prev) => (prev + 1) % featuredAlbums.length);
     setVideoCurrentTime(0);
     setTotalElapsedTime(0);
     setIsVideoPlaying(true);
+    setIsVideoLoading(true);
   };
 
   const goToPreviousAd = () => {
@@ -145,6 +121,7 @@ export default function NewReleasesScreen({
     setVideoCurrentTime(0);
     setTotalElapsedTime(0);
     setIsVideoPlaying(true);
+    setIsVideoLoading(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -160,104 +137,76 @@ export default function NewReleasesScreen({
     return `${artists[0]} & ${artists.length - 1} autres`;
   };
 
-  // Composant bannière publicitaire avec vidéo (durée limitée à 20s par pub)
   const renderAdvertBanner = () => {
     if (!featuredAlbums || featuredAlbums.length === 0) return null;
-    
     const currentAlbum = featuredAlbums[currentAdIndex];
-    
     return (
       <View style={styles.advertBanner}>
-        {/* Fond vidéo avec limite de 20 secondes par pub */}
         <Video
           ref={videoRef}
           source={{ uri: currentAlbum.videoUrl }}
           style={styles.advertVideo}
           resizeMode={ResizeMode.COVER}
           shouldPlay={isVideoPlaying}
-          isLooping={true} // La vidéo se répète automatiquement
+          isLooping={true}
           isMuted={isMuted}
-          onLoad={() => console.log('Vidéo chargée')}
-          onError={(error) => console.log('Erreur vidéo:', error)}
+          useNativeControls={false}
+          usePoster={true}
+          posterSource={{ uri: currentAlbum.coverUrl }}
+          posterStyle={styles.advertVideo}
+          progressUpdateIntervalMillis={1000}
+          onLoad={() => setIsVideoLoading(false)}
+          onLoadStart={() => setIsVideoLoading(true)}
+          onError={(error) => console.log('Error loading video:', error)}
           onPlaybackStatusUpdate={handleVideoPlaybackStatusUpdate}
-          progressUpdateIntervalMillis={1000} // Mise à jour chaque seconde
         />
-        
-        {/* Overlay sombre pour la lisibilité */}
         <View style={styles.advertOverlay} />
-
-        {/* Boutons de navigation gauche/droite */}
+        {isVideoLoading && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          </View>
+        )}
         {featuredAlbums.length > 1 && (
           <>
-            <TouchableOpacity 
-              style={styles.navButtonLeft}
-              onPress={goToPreviousAd}
-            >
+            <TouchableOpacity style={styles.navButtonLeft} onPress={goToPreviousAd}>
               <Ionicons name="chevron-back" size={24} color="#fff" />
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.navButtonRight}
-              onPress={goToNextAd}
-            >
+            <TouchableOpacity style={styles.navButtonRight} onPress={goToNextAd}>
               <Ionicons name="chevron-forward" size={24} color="#fff" />
             </TouchableOpacity>
           </>
         )}
-        
-        {/* Contenu de la bannière */}
         <View style={styles.advertContent}>
-          {/* Contrôles vidéo dans le coin */}
           <View style={styles.advertHeader}>
             <View style={styles.videoControls}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.playPauseButton}
                 onPress={() => {
                   if (totalElapsedTime >= MAX_VIDEO_DURATION) {
-                    // Redémarrer si on a atteint la limite
                     restartVideo();
                   } else {
-                    // Sinon toggle play/pause normal
                     setIsVideoPlaying(!isVideoPlaying);
                   }
                 }}
               >
-                <Ionicons 
-                  name={totalElapsedTime >= MAX_VIDEO_DURATION ? "refresh" : (isVideoPlaying ? "pause" : "play")} 
-                  size={16} 
-                  color="#fff" 
+                <Ionicons
+                  name={totalElapsedTime >= MAX_VIDEO_DURATION ? "refresh" : (isVideoPlaying ? "pause" : "play")}
+                  size={16}
+                  color="#fff"
                 />
               </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.muteButton}
-                onPress={() => setIsMuted(!isMuted)}
-              >
-                <Ionicons 
-                  name={isMuted ? "volume-mute" : "volume-high"} 
-                  size={16} 
-                  color="#fff" 
-                />
+              <TouchableOpacity style={styles.muteButton} onPress={() => setIsMuted(!isMuted)}>
+                <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={16} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
-          
-          {/* Spacer pour centrer le contenu */}
           <View style={styles.contentSpacer} />
-          
-          {/* Informations de l'album */}
           <View style={styles.advertInfo}>
-            <Text style={styles.advertTitle} numberOfLines={2}>
-              {currentAlbum.title}
-            </Text>
-            <Text style={styles.advertArtist} numberOfLines={1}>
-              {formatArtists(currentAlbum.artist)}
-            </Text>
-            <Text style={styles.advertSubtitle}>
-             Sortie {formatDate(currentAlbum.releaseDate)}
-            </Text>
-            
-            {/* Genres */}
+            <Text style={styles.advertTitle} numberOfLines={2}>{currentAlbum.title}</Text>
+            <Text style={styles.advertArtist} numberOfLines={1}>{formatArtists(currentAlbum.artist)}</Text>
+            <Text style={styles.advertSubtitle}>Sortie {formatDate(currentAlbum.releaseDate)}</Text>
             {currentAlbum.genre && currentAlbum.genre.length > 0 && (
               <View style={styles.videoGenres}>
                 {currentAlbum.genre.slice(0, 2).map((genre, index) => (
@@ -268,119 +217,62 @@ export default function NewReleasesScreen({
               </View>
             )}
           </View>
-          
-          {/* Actions principales - bouton compact */}
           <View style={styles.advertActions}>
-            <TouchableOpacity 
-              style={styles.watchFullButton}
-              onPress={() => onAlbumPress?.(currentAlbum)}
-            >
+            <TouchableOpacity style={styles.watchFullButton} onPress={() => onAlbumPress?.(currentAlbum)}>
               <Ionicons name="play" size={16} color="#000" />
               <Text style={styles.watchFullText}>VOIR</Text>
             </TouchableOpacity>
           </View>
         </View>
-        
-        {/* Badge nouveauté dans le coin */}
         <View style={styles.promoBadge}>
           <Text style={styles.promoText}>NOUVEAUTÉ</Text>
         </View>
-        
-        {/* Indicateurs de slide - avec navigation tactile */}
         {featuredAlbums.length > 1 && (
           <View style={styles.slideIndicators}>
             {featuredAlbums.map((_, index) => (
               <TouchableOpacity
                 key={index}
-                style={[
-                  styles.slideIndicator,
-                  index === currentAdIndex && styles.slideIndicatorActive
-                ]}
+                style={[styles.slideIndicator, index === currentAdIndex && styles.slideIndicatorActive]}
                 onPress={() => {
                   setCurrentAdIndex(index);
                   setVideoCurrentTime(0);
                   setTotalElapsedTime(0);
                   setIsVideoPlaying(true);
+                  setIsVideoLoading(true);
                 }}
               />
             ))}
           </View>
         )}
-
-        {/* Indicateur de progression de la pub (20 secondes) */}
-        <View style={styles.videoProgressContainer}>
-          <View 
-            style={[
-              styles.videoProgressBar, 
-              { width: `${(totalElapsedTime / MAX_VIDEO_DURATION) * 100}%` }
-            ]} 
-          />
-        </View>
       </View>
     );
   };
 
   const renderAlbumCard = (album: Album) => {
     const isLiked = likedAlbums.includes(album.id);
-    
     return (
-      <TouchableOpacity
-        key={album.id}
-        style={styles.albumCard}
-        onPress={() => onAlbumPress?.(album)}
-        activeOpacity={0.9}
-      >
-        {/* Image de couverture */}
+      <TouchableOpacity key={album.id} style={styles.albumCard} onPress={() => onAlbumPress?.(album)} activeOpacity={0.9}>
         <View style={styles.coverContainer}>
           <Image source={{ uri: album.coverUrl }} style={styles.coverImage} />
-          
-          {/* Overlay avec boutons */}
           <View style={styles.overlay}>
-            {/* Bouton Play */}
             <TouchableOpacity style={styles.playButton}>
               <Ionicons name="play" size={20} color="#000" />
             </TouchableOpacity>
-            
-            {/* Bouton Like */}
-            <TouchableOpacity 
-              style={styles.likeButton}
-              onPress={() => onToggleLike(album.id)}
-            >
-              <Ionicons 
-                name={isLiked ? "heart" : "heart-outline"} 
-                size={24} 
-                color={isLiked ? "#FF6B6B" : "#fff"} 
-              />
+            <TouchableOpacity style={styles.likeButton} onPress={() => onToggleLike(album.id)}>
+              <Ionicons name={isLiked ? "heart" : "heart-outline"} size={24} color={isLiked ? "#FF6B6B" : "#fff"} />
             </TouchableOpacity>
           </View>
-          
-          {/* Date en overlay */}
           <View style={styles.dateOverlay}>
             <Text style={styles.dateText}>{formatDate(album.releaseDate)}</Text>
           </View>
         </View>
-
-        {/* Informations de l'album */}
         <View style={styles.albumInfo}>
-          {/* Titre principal */}
-          <Text style={styles.albumTitle} numberOfLines={2}>
-            {album.title}
-          </Text>
-          
-          {/* Artiste */}
-          <Text style={styles.artistName} numberOfLines={1}>
-            {formatArtists(album.artist)}
-          </Text>
-          
-          {/* Date et action */}
+          <Text style={styles.albumTitle} numberOfLines={2}>{album.title}</Text>
+          <Text style={styles.artistName} numberOfLines={1}>{formatArtists(album.artist)}</Text>
           <View style={styles.metaInfo}>
-            <Text style={styles.releaseDate}>
-              {formatDate(album.releaseDate)}
-            </Text>
+            <Text style={styles.releaseDate}>{formatDate(album.releaseDate)}</Text>
             <Text style={styles.newLabel}>NOUVEAU</Text>
           </View>
-          
-          {/* Tags de genre */}
           {album.genre && album.genre.length > 0 && (
             <View style={styles.genreTags}>
               {album.genre.slice(0, 3).map((genre, index) => (
@@ -401,53 +293,35 @@ export default function NewReleasesScreen({
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Colors.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
             <Text style={styles.locationText}>Lyon</Text>
           </View>
-          
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.filterButton}>
               <Ionicons name="options-outline" size={20} color={Colors.text} />
               <Text style={styles.filterText}>Filtres</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity style={styles.heartButton}>
               <Ionicons name="heart-outline" size={24} color={Colors.text} />
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Bannière publicitaire avec rotation toutes les 20s */}
         {renderAdvertBanner()}
-
-        {/* Titre de section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.dayText}>AUJOURD'HUI</Text>
           <Text style={styles.sectionTitle}>🎵 NOUVELLES SORTIES</Text>
         </View>
-
-        {/* Liste des albums */}
         <View style={styles.albumsList}>
           {albums.map(renderAlbumCard)}
         </View>
-
-        {/* Indicateur de fin */}
         <View style={styles.endIndicator}>
           <Text style={styles.endText}>
-            {albums.length > 0 
-              ? `${albums.length} nouveaux albums découverts`
-              : 'Aucun nouvel album aujourd\'hui'
-            }
+            {albums.length > 0 ? `${albums.length} nouveaux albums découverts` : 'Aucun nouvel album aujourd\'hui'}
           </Text>
         </View>
       </ScrollView>
@@ -634,8 +508,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
   },
-  
-  // Styles pour la bannière publicitaire avec rotation toutes les 20s
   advertBanner: {
     height: 280,
     marginHorizontal: 20,
@@ -660,6 +532,28 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     borderRadius: 20,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    zIndex: 10,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
   advertContent: {
     flex: 1,
@@ -807,7 +701,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     width: 20,
   },
-  // Styles pour les boutons de navigation
   navButtonLeft: {
     position: 'absolute',
     left: 12,
@@ -833,35 +726,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 5,
-  },
-  // Styles pour l'indicateur de navigation
-  navigationIndicator: {
-    position: 'absolute',
-    bottom: 10,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 3,
-  },
-  navigationText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-  },
-  // Styles pour l'indicateur de progression de la pub (20s)
-  videoProgressContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    zIndex: 4,
-  },
-  videoProgressBar: {
-    height: '100%',
-    backgroundColor: '#FF6B6B',
-    borderRadius: 2,
   },
 });
