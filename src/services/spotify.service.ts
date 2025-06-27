@@ -47,6 +47,73 @@ export class SpotifyService {
     return this.accessToken!;
   }
 
+  /**
+   * Récupère les genres des artistes depuis l'API Spotify
+   */
+  static async getArtistGenres(artistIds: string[]): Promise<string[]> {
+    try {
+      const token = await this.getAccessToken();
+      const uniqueArtistIds = [...new Set(artistIds)].slice(0, 50); // Limite API Spotify
+      
+      if (uniqueArtistIds.length === 0) return [];
+      
+      const response = await fetch(
+        `https://api.spotify.com/v1/artists?ids=${uniqueArtistIds.join(',')}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        console.warn('Impossible de récupérer les genres des artistes');
+        return [];
+      }
+      
+      const data = await response.json();
+      const allGenres = new Set<string>();
+      
+      if (data.artists) {
+        data.artists.forEach((artist: any) => {
+          if (artist && artist.genres) {
+            artist.genres.forEach((genre: string) => {
+              // Utiliser les genres Spotify tels quels, juste avec une meilleure capitalisation
+              const formattedGenre = this.formatSpotifyGenre(genre);
+              if (formattedGenre) {
+                allGenres.add(formattedGenre);
+              }
+            });
+          }
+        });
+      }
+      
+      return Array.from(allGenres);
+    } catch (error) {
+      console.warn('Erreur récupération genres artistes:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Formate les genres Spotify avec une capitalisation correcte (sans changer les noms)
+   */
+  static formatSpotifyGenre(spotifyGenre: string): string {
+    // Garder les genres Spotify tels quels, juste améliorer la capitalisation
+    return spotifyGenre
+      .split(' ')
+      .map(word => {
+        // Garder les mots courts en minuscules (and, of, the, etc.)
+        if (['and', 'of', 'the', 'in', 'to', 'for', 'with', 'by'].includes(word.toLowerCase())) {
+          return word.toLowerCase();
+        }
+        // Capitaliser la première lettre
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
+  }
+
   static async getNewReleases(country: string = 'FR', limit: number = 50): Promise<Album[]> {
     try {
       const token = await this.getAccessToken();
@@ -81,11 +148,71 @@ export class SpotifyService {
             coverUrl,
             spotifyUrl: album.external_urls.spotify,
             youtubeUrl: undefined, // Sera ajouté après
-            genre: [],
+            genre: [], // Sera rempli après récupération des genres
             country: album.available_markets || [],
             isLiked: false,
           };
         });
+
+        // 🎵 Récupérer les genres des artistes en batch
+        console.log('🎵 Récupération des genres des artistes...');
+        const allArtistIds = albums.flatMap(album => album.artistId || []);
+        const uniqueArtistIds = [...new Set(allArtistIds)];
+        
+        // Récupérer les genres par batch de 50 (limite API Spotify)
+        const artistGenresMap = new Map<string, string[]>();
+        
+        for (let i = 0; i < uniqueArtistIds.length; i += 50) {
+          const batch = uniqueArtistIds.slice(i, i + 50);
+          try {
+            const batchGenres = await this.getArtistGenres(batch);
+            const token = await this.getAccessToken();
+            
+            const artistResponse = await fetch(
+              `https://api.spotify.com/v1/artists?ids=${batch.join(',')}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                }
+              }
+            );
+            
+            if (artistResponse.ok) {
+              const artistData = await artistResponse.json();
+              if (artistData.artists) {
+                artistData.artists.forEach((artist: any) => {
+                  if (artist && artist.genres) {
+                    const formattedGenres = artist.genres
+                      .map((g: string) => this.formatSpotifyGenre(g))
+                      .filter((g: string) => g !== null && g !== '');
+                    artistGenresMap.set(artist.id, formattedGenres);
+                  }
+                });
+              }
+            }
+          } catch (error) {
+            console.warn('Erreur récupération batch genres:', error);
+          }
+        }
+        
+        // Assigner les genres aux albums
+        albums.forEach(album => {
+          const albumGenres = new Set<string>();
+          
+          // Récupérer les genres de tous les artistes de l'album
+          if (album.artistId) {
+            album.artistId.forEach(artistId => {
+              const artistGenres = artistGenresMap.get(artistId) || [];
+              artistGenres.forEach(genre => albumGenres.add(genre));
+            });
+          }
+          
+          // Garder les genres trouvés ou un tableau vide si aucun
+          album.genre = Array.from(albumGenres).slice(0, 3); // Limiter à 3 genres max
+        });
+
+        console.log(`✅ Genres assignés pour ${albums.length} albums`);
 
         // Récupérer les liens YouTube en batch
         console.log('🎥 Recherche des liens YouTube...');

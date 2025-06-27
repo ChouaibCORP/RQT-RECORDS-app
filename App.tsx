@@ -21,6 +21,7 @@ import TabNavigator from './src/navigation/TabNavigator';
 import SwipeScreen from './src/screens/SwipeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import NewReleasesScreen from './src/screens/NewReleasesScreen';
+import TendancesScreen from './src/screens/TendancesScreen';
 import AlbumDetailScreen from './src/screens/AlbumDetailScreen';
 
 // Types & Constants
@@ -189,6 +190,18 @@ export default function App() {
       case 'nouvelles':
         return (
           <NewReleasesScreen
+            albums={albums}
+            likedAlbums={likedAlbums}
+            onToggleLike={toggleLike}
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+            onAlbumPress={setSelectedAlbum}
+          />
+        );
+
+      case 'tendances':
+        return (
+          <TendancesScreen
             albums={albums}
             likedAlbums={likedAlbums}
             onToggleLike={toggleLike}

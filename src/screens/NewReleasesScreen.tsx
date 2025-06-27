@@ -1,5 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Image, Dimensions, ImageBackground } from 'react-native';
+// src/screens/NewReleasesScreen.tsx
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { PanGestureHandler, PanGestureHandlerGestureEvent, PanGestureHandlerStateChangeEvent, State } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Album } from '../types';
@@ -16,6 +19,13 @@ interface NewReleasesScreenProps {
   onAlbumPress?: (album: Album) => void;
 }
 
+interface WeekData {
+  weekStart: Date;
+  weekEnd: Date;
+  weekLabel: string;
+  albums: Album[];
+}
+
 export default function NewReleasesScreen({
   albums,
   likedAlbums,
@@ -30,37 +40,129 @@ export default function NewReleasesScreen({
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
+  const [showWeekPicker, setShowWeekPicker] = useState(false);
+  const [selectedGenre, setSelectedGenre] = useState('Tous les genres');
+  const [showGenrePicker, setShowGenrePicker] = useState(false);
   const videoRef = useRef<Video>(null);
 
   // Durée maximale de chaque pub en millisecondes (15 secondes)
   const MAX_VIDEO_DURATION = 15 * 1000;
 
+  // Extraire tous les genres uniques des albums depuis l'API Spotify
+  const allGenres = useMemo(() => {
+    const genreSet = new Set<string>();
+    albums.forEach(album => {
+      if (album.genre && album.genre.length > 0) {
+        album.genre.forEach(genre => genreSet.add(genre));
+      }
+    });
+    return ['Tous les genres', ...Array.from(genreSet).sort()];
+  }, [albums]);
+
+  // Fonction pour obtenir le début de la semaine (lundi)
+  const getWeekStart = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+  };
+
+  // Fonction pour obtenir la fin de la semaine (dimanche)
+  const getWeekEnd = (weekStart: Date) => {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return weekEnd;
+  };
+
+  // Fonction pour formater la semaine
+  const formatWeekLabel = (weekStart: Date, weekEnd: Date) => {
+    const startDay = weekStart.getDate();
+    const endDay = weekEnd.getDate();
+    const startMonth = weekStart.toLocaleDateString('fr', { month: 'short' });
+    const endMonth = weekEnd.toLocaleDateString('fr', { month: 'short' });
+    
+    if (startMonth === endMonth) {
+      return `${startDay}-${endDay} ${startMonth.toUpperCase()}`;
+    } else {
+      return `${startDay} ${startMonth.toUpperCase()} - ${endDay} ${endMonth.toUpperCase()}`;
+    }
+  };
+
+  // Générer les semaines avec filtrage par genre
+  const weeksData = useMemo(() => {
+    const today = new Date();
+    const currentWeekStart = getWeekStart(today);
+    const weeks: WeekData[] = [];
+
+    // Ajouter l'option "Toutes les semaines" en premier
+    const allWeeksAlbums = albums.filter(album => {
+      if (selectedGenre === 'Tous les genres') {
+        return true;
+      }
+      return album.genre && album.genre.includes(selectedGenre);
+    });
+
+    weeks.push({
+      weekStart: new Date(0), // Date fictive
+      weekEnd: new Date(), // Date fictive
+      weekLabel: 'Toutes les semaines',
+      albums: allWeeksAlbums
+    });
+
+    // Ajouter les semaines individuelles
+    for (let i = 4; i >= 0; i--) {
+      const weekStart = new Date(currentWeekStart);
+      weekStart.setDate(currentWeekStart.getDate() - (i * 7));
+      const weekEnd = getWeekEnd(weekStart);
+      
+      const weekAlbums = albums.filter(album => {
+        const releaseDate = new Date(album.releaseDate);
+        const isInWeek = releaseDate >= weekStart && releaseDate <= weekEnd;
+        
+        if (!isInWeek) return false;
+        
+        if (selectedGenre === 'Tous les genres') {
+          return true;
+        }
+        
+        return album.genre && album.genre.includes(selectedGenre);
+      });
+
+      weeks.push({
+        weekStart,
+        weekEnd,
+        weekLabel: formatWeekLabel(weekStart, weekEnd),
+        albums: weekAlbums
+      });
+    }
+
+    return weeks;
+  }, [albums, selectedGenre]);
+
+  // Albums de la semaine sélectionnée
+  const selectedWeekAlbums = weeksData[selectedWeekIndex]?.albums || [];
+
   const getVideoUrlForAlbum = (album: Album) => {
-    // Vidéo spécifique pour Karol G
     if (album.artist.some(artist => artist.toLowerCase().includes('karol g'))) {
       return 'https://res.cloudinary.com/dr0atsnqy/video/upload/v1750757556/bas1u40hcbqnupfdnhfc.mp4';
     }
-    // Vidéo spécifique pour Hamza
     if (album.artist.some(artist => artist.toLowerCase().includes('hamza'))) {
       return 'https://res.cloudinary.com/dr0atsnqy/video/upload/v1750757556/t9w0qqc7ns7pzof2j3s3.mp4';
     }
-    // Vidéo spécifique pour Olamide
     if (album.artist.some(artist => artist.toLowerCase().includes('olamide'))) {
       return 'https://res.cloudinary.com/dr0atsnqy/video/upload/v1750759860/yzmz1towfxglua2ogipj.mp4'; 
     }
-    // Vidéos de sample pour les autres artistes
     const sampleVideos = [
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
       'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
     ];
-    // Hash simple basé sur l'ID de l'album pour avoir une vidéo cohérente
     const index = Math.abs(album.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % sampleVideos.length;
     return sampleVideos[index];
   };
 
-  // Fonction pour vérifier si un album est de l'un des artistes spécifiés
   const isFeaturedArtist = (album: Album) => {
     return album.artist.some(artist =>
       artist.toLowerCase().includes('hamza') ||
@@ -69,7 +171,7 @@ export default function NewReleasesScreen({
     );
   };
 
-  // Filtrer les albums pour inclure uniquement ceux des artistes spécifiés
+  // Albums vedettes toujours depuis tous les albums
   const featuredAlbums = albums.filter(isFeaturedArtist).slice(0, 3).map(album => ({
     ...album,
     videoUrl: getVideoUrlForAlbum(album),
@@ -97,6 +199,29 @@ export default function NewReleasesScreen({
     if (status.isLoaded) {
       const currentTimeMs = status.positionMillis || 0;
       setVideoCurrentTime(currentTimeMs);
+    }
+  };
+
+  const handleSwipeGesture = (event: PanGestureHandlerGestureEvent) => {
+    // Pas besoin de logique pendant le geste
+  };
+
+  const handleSwipeStateChange = (event: PanGestureHandlerStateChangeEvent) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX, velocityX } = event.nativeEvent;
+      
+      // Seuils pour déclencher le swipe
+      const SWIPE_THRESHOLD = 50;
+      const VELOCITY_THRESHOLD = 500;
+      
+      // Swipe vers la droite (album précédent)
+      if (translationX > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD) {
+        goToPreviousAd();
+      }
+      // Swipe vers la gauche (album suivant)  
+      else if (translationX < -SWIPE_THRESHOLD || velocityX < -VELOCITY_THRESHOLD) {
+        goToNextAd();
+      }
     }
   };
 
@@ -137,114 +262,212 @@ export default function NewReleasesScreen({
     return `${artists[0]} & ${artists.length - 1} autres`;
   };
 
+  const renderGenrePicker = () => {
+    if (!showGenrePicker) return null;
+
+    return (
+      <View style={styles.pickerOverlay}>
+        <TouchableOpacity 
+          style={styles.pickerBackdrop} 
+          onPress={() => setShowGenrePicker(false)}
+        />
+        <View style={styles.pickerContainer}>
+          <View style={styles.pickerHeader}>
+            <Text style={styles.pickerTitle}>Choisir un genre</Text>
+            <TouchableOpacity onPress={() => setShowGenrePicker(false)}>
+              <Ionicons name="close" size={24} color={Colors.text} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.pickerList}>
+            {allGenres.map((genre, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.pickerItem,
+                  selectedGenre === genre && styles.pickerItemSelected
+                ]}
+                onPress={() => {
+                  setSelectedGenre(genre);
+                  setShowGenrePicker(false);
+                  setSelectedWeekIndex(0);
+                }}
+              >
+                <Text style={[
+                  styles.pickerItemText,
+                  selectedGenre === genre && styles.pickerItemTextSelected
+                ]}>
+                  {genre}
+                </Text>
+                {selectedGenre === genre && (
+                  <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  };
+
+  const renderWeekPicker = () => {
+    if (!showWeekPicker) return null;
+
+    return (
+      <View style={styles.pickerOverlay}>
+        <TouchableOpacity 
+          style={styles.pickerBackdrop} 
+          onPress={() => setShowWeekPicker(false)}
+        />
+        <View style={styles.pickerContainer}>
+          <View style={styles.pickerHeader}>
+            <Text style={styles.pickerTitle}>Choisir une semaine</Text>
+            <TouchableOpacity onPress={() => setShowWeekPicker(false)}>
+              <Ionicons name="close" size={24} color={Colors.text} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.pickerList}>
+            {weeksData.map((week, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.pickerItem,
+                  selectedWeekIndex === index && styles.pickerItemSelected
+                ]}
+                onPress={() => {
+                  setSelectedWeekIndex(index);
+                  setShowWeekPicker(false);
+                }}
+              >
+                <View style={styles.pickerItemContent}>
+                  <Text style={[
+                    styles.pickerItemText,
+                    selectedWeekIndex === index && styles.pickerItemTextSelected
+                  ]}>
+                    {week.weekLabel}
+                  </Text>
+                  <Text style={[
+                    styles.pickerItemCount,
+                    selectedWeekIndex === index && styles.pickerItemCountSelected
+                  ]}>
+                    {week.albums.length} album{week.albums.length > 1 ? 's' : ''}
+                  </Text>
+                </View>
+                {selectedWeekIndex === index && (
+                  <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  };
+
   const renderAdvertBanner = () => {
     if (!featuredAlbums || featuredAlbums.length === 0) return null;
     const currentAlbum = featuredAlbums[currentAdIndex];
     return (
-      <View style={styles.advertBanner}>
-        <Video
-          ref={videoRef}
-          source={{ uri: currentAlbum.videoUrl }}
-          style={styles.advertVideo}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={isVideoPlaying}
-          isLooping={true}
-          isMuted={isMuted}
-          useNativeControls={false}
-          usePoster={true}
-          posterSource={{ uri: currentAlbum.coverUrl }}
-          posterStyle={styles.advertVideo}
-          progressUpdateIntervalMillis={1000}
-          onLoad={() => setIsVideoLoading(false)}
-          onLoadStart={() => setIsVideoLoading(true)}
-          onError={(error) => console.log('Error loading video:', error)}
-          onPlaybackStatusUpdate={handleVideoPlaybackStatusUpdate}
-        />
-        <View style={styles.advertOverlay} />
-        {isVideoLoading && (
-          <View style={styles.loadingOverlay}>
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading...</Text>
-            </View>
-          </View>
-        )}
-        {featuredAlbums.length > 1 && (
-          <>
-            <TouchableOpacity style={styles.navButtonLeft} onPress={goToPreviousAd}>
-              <Ionicons name="chevron-back" size={24} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButtonRight} onPress={goToNextAd}>
-              <Ionicons name="chevron-forward" size={24} color="#fff" />
-            </TouchableOpacity>
-          </>
-        )}
-        <View style={styles.advertContent}>
-          <View style={styles.advertHeader}>
-            <View style={styles.videoControls}>
-              <TouchableOpacity
-                style={styles.playPauseButton}
-                onPress={() => {
-                  if (totalElapsedTime >= MAX_VIDEO_DURATION) {
-                    restartVideo();
-                  } else {
-                    setIsVideoPlaying(!isVideoPlaying);
-                  }
-                }}
-              >
-                <Ionicons
-                  name={totalElapsedTime >= MAX_VIDEO_DURATION ? "refresh" : (isVideoPlaying ? "pause" : "play")}
-                  size={16}
-                  color="#fff"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.muteButton} onPress={() => setIsMuted(!isMuted)}>
-                <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={16} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </View>
-          <View style={styles.contentSpacer} />
-          <View style={styles.advertInfo}>
-            <Text style={styles.advertTitle} numberOfLines={2}>{currentAlbum.title}</Text>
-            <Text style={styles.advertArtist} numberOfLines={1}>{formatArtists(currentAlbum.artist)}</Text>
-            <Text style={styles.advertSubtitle}>Sortie {formatDate(currentAlbum.releaseDate)}</Text>
-            {currentAlbum.genre && currentAlbum.genre.length > 0 && (
-              <View style={styles.videoGenres}>
-                {currentAlbum.genre.slice(0, 2).map((genre, index) => (
-                  <View key={index} style={styles.videoGenreTag}>
-                    <Text style={styles.videoGenreText}>{genre.toUpperCase()}</Text>
-                  </View>
-                ))}
+      <PanGestureHandler
+        onGestureEvent={handleSwipeGesture}
+        onHandlerStateChange={handleSwipeStateChange}
+        activeOffsetX={[-10, 10]}
+        failOffsetY={[-20, 20]}
+      >
+        <View style={styles.advertBanner}>
+          <Video
+            ref={videoRef}
+            source={{ uri: currentAlbum.videoUrl }}
+            style={styles.advertVideo}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={isVideoPlaying}
+            isLooping={true}
+            isMuted={isMuted}
+            useNativeControls={false}
+            usePoster={true}
+            posterSource={{ uri: currentAlbum.coverUrl }}
+            posterStyle={styles.advertVideo}
+            progressUpdateIntervalMillis={1000}
+            onLoad={() => setIsVideoLoading(false)}
+            onLoadStart={() => setIsVideoLoading(true)}
+            onError={(error) => console.log('Error loading video:', error)}
+            onPlaybackStatusUpdate={handleVideoPlaybackStatusUpdate}
+          />
+          <View style={styles.advertOverlay} />
+          {isVideoLoading && (
+            <View style={styles.loadingOverlay}>
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading...</Text>
               </View>
-            )}
+            </View>
+          )}
+          <View style={styles.advertContent}>
+            <View style={styles.advertHeader}>
+              <View style={styles.videoControls}>
+                <TouchableOpacity
+                  style={styles.playPauseButton}
+                  onPress={() => {
+                    if (totalElapsedTime >= MAX_VIDEO_DURATION) {
+                      restartVideo();
+                    } else {
+                      setIsVideoPlaying(!isVideoPlaying);
+                    }
+                  }}
+                >
+                  <Ionicons
+                    name={totalElapsedTime >= MAX_VIDEO_DURATION ? "refresh" : (isVideoPlaying ? "pause" : "play")}
+                    size={16}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.muteButton} onPress={() => setIsMuted(!isMuted)}>
+                  <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.contentSpacer} />
+            <View style={styles.advertInfo}>
+              <Text style={styles.advertTitle} numberOfLines={2}>{currentAlbum.title}</Text>
+              <Text style={styles.advertArtist} numberOfLines={1}>{formatArtists(currentAlbum.artist)}</Text>
+              <Text style={styles.advertSubtitle}>Sortie {formatDate(currentAlbum.releaseDate)}</Text>
+              {currentAlbum.genre && currentAlbum.genre.length > 0 && (
+                <View style={styles.videoGenres}>
+                  {currentAlbum.genre.slice(0, 2).map((genre, index) => (
+                    <View key={index} style={styles.videoGenreTag}>
+                      <Text style={styles.videoGenreText}>{genre.toUpperCase()}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+            <View style={styles.advertActions}>
+              <TouchableOpacity style={styles.watchFullButton} onPress={() => onAlbumPress?.(currentAlbum)}>
+                <Ionicons name="play" size={16} color="#000" />
+                <Text style={styles.watchFullText}>VOIR</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.advertActions}>
-            <TouchableOpacity style={styles.watchFullButton} onPress={() => onAlbumPress?.(currentAlbum)}>
-              <Ionicons name="play" size={16} color="#000" />
-              <Text style={styles.watchFullText}>VOIR</Text>
-            </TouchableOpacity>
+          <View style={styles.promoBadge}>
+            <Text style={styles.promoText}>NOUVEAUTÉ</Text>
           </View>
+          {featuredAlbums.length > 1 && (
+            <View style={styles.slideIndicators}>
+              {featuredAlbums.map((_, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.slideIndicator, index === currentAdIndex && styles.slideIndicatorActive]}
+                  onPress={() => {
+                    setCurrentAdIndex(index);
+                    setVideoCurrentTime(0);
+                    setTotalElapsedTime(0);
+                    setIsVideoPlaying(true);
+                    setIsVideoLoading(true);
+                  }}
+                />
+              ))}
+            </View>
+          )}
         </View>
-        <View style={styles.promoBadge}>
-          <Text style={styles.promoText}>NOUVEAUTÉ</Text>
-        </View>
-        {featuredAlbums.length > 1 && (
-          <View style={styles.slideIndicators}>
-            {featuredAlbums.map((_, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[styles.slideIndicator, index === currentAdIndex && styles.slideIndicatorActive]}
-                onPress={() => {
-                  setCurrentAdIndex(index);
-                  setVideoCurrentTime(0);
-                  setTotalElapsedTime(0);
-                  setIsVideoPlaying(true);
-                  setIsVideoLoading(true);
-                }}
-              />
-            ))}
-          </View>
-        )}
-      </View>
+      </PanGestureHandler>
     );
   };
 
@@ -297,34 +520,69 @@ export default function NewReleasesScreen({
         }
       >
         <View style={styles.header}>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.locationText}>Lyon</Text>
-          </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.filterButton}>
+            <TouchableOpacity 
+              style={styles.filterButton}
+              onPress={() => setShowGenrePicker(true)}
+            >
               <Ionicons name="options-outline" size={20} color={Colors.text} />
-              <Text style={styles.filterText}>Filtres</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.heartButton}>
-              <Ionicons name="heart-outline" size={24} color={Colors.text} />
+              <Text style={styles.filterText}>Genre</Text>
             </TouchableOpacity>
           </View>
         </View>
-        {renderAdvertBanner()}
+
+        {/* Sélecteur de semaine */}
+        <View style={styles.selector}>
+          <TouchableOpacity 
+            style={styles.selectorButton}
+            onPress={() => setShowWeekPicker(true)}
+          >
+            <View style={styles.selectorContent}>
+              <Text style={styles.selectorLabel}>SEMAINE</Text>
+              <Text style={styles.selectorText}>
+                {weeksData[selectedWeekIndex]?.weekLabel || 'Sélectionner'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-down" size={20} color={Colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        {featuredAlbums.length > 0 && renderAdvertBanner()}
+
         <View style={styles.sectionHeader}>
-          <Text style={styles.dayText}>AUJOURD'HUI</Text>
-          <Text style={styles.sectionTitle}>🎵 NOUVELLES SORTIES</Text>
+          <Text style={styles.dayText}>
+            {selectedWeekIndex === 0 
+              ? 'TOUTES LES SEMAINES' 
+              : weeksData[selectedWeekIndex]?.weekLabel.toUpperCase() || 'SEMAINE'
+            }
+          </Text>
+          <Text style={styles.sectionTitle}>
+            🎵 {selectedGenre === 'Tous les genres' ? 'NOUVELLES SORTIES' : selectedGenre.toUpperCase()}
+          </Text>
         </View>
+
         <View style={styles.albumsList}>
-          {albums.map(renderAlbumCard)}
+          {selectedWeekAlbums.map(renderAlbumCard)}
         </View>
+
         <View style={styles.endIndicator}>
           <Text style={styles.endText}>
-            {albums.length > 0 ? `${albums.length} nouveaux albums découverts` : 'Aucun nouvel album aujourd\'hui'}
+            {selectedWeekAlbums.length > 0 
+              ? `${selectedWeekAlbums.length} album${selectedWeekAlbums.length > 1 ? 's' : ''} trouvé${selectedWeekAlbums.length > 1 ? 's' : ''}`
+              : selectedWeekIndex === 0
+                ? (selectedGenre === 'Tous les genres' 
+                    ? 'Aucun nouvel album trouvé'
+                    : `Aucun album ${selectedGenre} trouvé`)
+                : (selectedGenre === 'Tous les genres' 
+                    ? 'Aucun nouvel album cette semaine'
+                    : `Aucun album ${selectedGenre} cette semaine`)
+            }
           </Text>
         </View>
       </ScrollView>
+
+      {renderGenrePicker()}
+      {renderWeekPicker()}
     </View>
   );
 }
@@ -339,7 +597,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -372,6 +630,108 @@ const styles = StyleSheet.create({
   },
   heartButton: {
     padding: 4,
+  },
+  selector: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  selectorButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  selectorContent: {
+    flex: 1,
+  },
+  selectorLabel: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  selectorText: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
+  pickerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  pickerContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#111',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  pickerTitle: {
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  pickerList: {
+    maxHeight: 400,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  pickerItemSelected: {
+    backgroundColor: '#222',
+  },
+  pickerItemContent: {
+    flex: 1,
+  },
+  pickerItemText: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  pickerItemTextSelected: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  pickerItemCount: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  pickerItemCountSelected: {
+    color: Colors.primary,
   },
   sectionHeader: {
     paddingHorizontal: 20,
@@ -700,31 +1060,5 @@ const styles = StyleSheet.create({
   slideIndicatorActive: {
     backgroundColor: '#fff',
     width: 20,
-  },
-  navButtonLeft: {
-    position: 'absolute',
-    left: 12,
-    top: '50%',
-    transform: [{ translateY: -20 }],
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 5,
-  },
-  navButtonRight: {
-    position: 'absolute',
-    right: 12,
-    top: '50%',
-    transform: [{ translateY: -20 }],
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 5,
   },
 });
