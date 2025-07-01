@@ -1,6 +1,5 @@
 // src/types/index.ts
 
-// 🔧 TabKey avec ordre cohérent : Nouvelles en premier
 export type TabKey = 'nouvelles' | 'swipe' | 'tendances' | 'genres' | 'profil';
 
 export interface Tab {
