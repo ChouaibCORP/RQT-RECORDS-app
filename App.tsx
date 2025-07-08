@@ -150,6 +150,63 @@ export default function App() {
     });
   };
 
+  // Fonction pour rendre la page de fond actuelle
+  const renderBackgroundScreen = () => {
+    switch (activeTab) {
+      case 'swipe':
+        return (
+          <SwipeScreen
+            albums={albums}
+            likedAlbums={likedAlbums}
+            discoveredAlbums={discoveredAlbums}
+            onToggleLike={toggleLike}
+            userStats={userStats}
+            onUpdateStats={updateUserStats}
+            onReload={loadNewReleases}
+            loading={loading}
+          />
+        );
+
+      case 'nouvelles':
+        return (
+          <NewReleasesScreen
+            albums={albums}
+            likedAlbums={likedAlbums}
+            onToggleLike={toggleLike}
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+            onAlbumPress={() => {}} // Désactiver les clics en arrière-plan
+          />
+        );
+
+      case 'tendances':
+        return (
+          <TendancesScreen
+            albums={albums}
+            likedAlbums={likedAlbums}
+            onToggleLike={toggleLike}
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+            onAlbumPress={() => {}} // Désactiver les clics en arrière-plan
+          />
+        );
+
+      case 'profil':
+        return (
+          <ProfileScreen
+            userStats={userStats}
+            likedAlbums={likedAlbums}
+            discoveredAlbums={discoveredAlbums}
+            albums={albums}
+            onClearData={handleClearData}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
   const renderContent = () => {
     if (!dataLoaded) {
       return (
@@ -157,18 +214,6 @@ export default function App() {
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Chargement de vos données...</Text>
         </View>
-      );
-    }
-
-    // Si un album est sélectionné, afficher ses détails
-    if (selectedAlbum) {
-      return (
-        <AlbumDetailScreen
-          album={selectedAlbum}
-          isLiked={likedAlbums.includes(selectedAlbum.id)}
-          onToggleLike={toggleLike}
-          onBack={() => setSelectedAlbum(null)}
-        />
       );
     }
 
@@ -248,9 +293,23 @@ export default function App() {
         </View>
       )}
 
-      {/* Content */}
+      {/* Content Container avec gestion de l'overlay */}
       <View style={styles.contentContainer}>
+        {/* Page principale toujours rendue */}
         {renderContent()}
+        
+        {/* AlbumDetailScreen en overlay avec l'effet iOS */}
+        {selectedAlbum && (
+          <View style={StyleSheet.absoluteFillObject}>
+            <AlbumDetailScreen
+              album={selectedAlbum}
+              isLiked={likedAlbums.includes(selectedAlbum.id)}
+              onToggleLike={toggleLike}
+              onBack={() => setSelectedAlbum(null)}
+              backgroundComponent={renderBackgroundScreen()}
+            />
+          </View>
+        )}
       </View>
 
       {/* Bottom Navigation - masqué si album sélectionné */}

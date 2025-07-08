@@ -56,7 +56,12 @@ export default function NewReleasesScreen({
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
   const [isVideoLoading, setIsVideoLoading] = useState(true);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const videoRef = useRef<Video>(null);
+
+  // Durée maximale de chaque pub en millisecondes (15 secondes)
+  const MAX_VIDEO_DURATION = 15 * 1000;
 
   // Extraire les genres uniques
   const allGenres = useMemo(() => {
@@ -88,9 +93,19 @@ export default function NewReleasesScreen({
   const formatWeekLabel = (weekStart: Date, weekEnd: Date) => {
     const startDay = weekStart.getDate();
     const endDay = weekEnd.getDate();
-    const month = weekStart.toLocaleDateString('fr', { month: 'long' });
+    const startMonth = weekStart.getMonth();
+    const endMonth = weekEnd.getMonth();
     
-    return `${startDay} - ${endDay} ${month}`;
+    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
+                       'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    
+    // Si les deux dates sont dans le même mois
+    if (startMonth === endMonth) {
+      return `${startDay}-${endDay} ${monthNames[startMonth]}`;
+    } else {
+      // Si les dates sont dans des mois différents
+      return `${startDay} ${monthNames[startMonth]} - ${endDay} ${monthNames[endMonth]}`;
+    }
   };
 
   // Vidéos pour les artistes vedettes
@@ -166,6 +181,7 @@ export default function NewReleasesScreen({
       });
     }
 
+    // Retourner toutes les sections, même celles qui sont vides
     return sections.filter(section => section.data.length > 0);
   }, [albums, selectedGenre]);
 
@@ -298,12 +314,17 @@ export default function NewReleasesScreen({
           {featuredAlbums.length > 1 && (
             <View style={styles.pagination}>
               {featuredAlbums.map((_, index) => (
-                <View
+                <TouchableOpacity
                   key={index}
                   style={[
                     styles.paginationDot,
                     index === currentAdIndex && styles.paginationDotActive
                   ]}
+                  onPress={() => {
+                    setCurrentAdIndex(index);
+                    setIsVideoPlaying(true);
+                    setIsVideoLoading(true);
+                  }}
                 />
               ))}
             </View>
@@ -385,7 +406,7 @@ export default function NewReleasesScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}> sorties</Text>
+        <Text style={styles.headerTitle}>Nouvelles sorties</Text>
         <TouchableOpacity 
           style={styles.genreButton}
           onPress={() => setShowGenrePicker(true)}
@@ -534,22 +555,26 @@ const styles = StyleSheet.create({
   },
   pagination: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 3,
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
+    zIndex: 10,
   },
   paginationDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   paginationDotActive: {
     backgroundColor: '#fff',
-    width: 20,
+    width: 24,
+    transform: [{ scale: 1.1 }],
   },
   // Sections des semaines
   weekSection: {
@@ -609,6 +634,18 @@ const styles = StyleSheet.create({
   albumArtist: {
     fontSize: 13,
     color: Colors.textSecondary,
+  },
+  // Section vide
+  emptySection: {
+    height: ALBUM_SIZE + 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  emptySectionText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
   },
   // Genre picker
   pickerOverlay: {
