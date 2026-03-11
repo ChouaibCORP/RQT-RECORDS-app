@@ -7,14 +7,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Spotify](https://img.shields.io/badge/Spotify-1DB954?style=for-the-badge&logo=spotify&logoColor=white)](https://developer.spotify.com/)
 
----
-
-## 📱 Captures d'écran
-
-```
-[Mode Découverte]    [Nouvelles Sorties]    [Profil & Stats]
-     ⚡                    🎵                     📊
-```
 
 ---
 
@@ -410,54 +402,7 @@ cache="force-cache"
 
 ---
 
-## 🚀 Roadmap & Prochaines Fonctionnalités
 
-### ✅ Phase 1 - MVP (Complété)
-- [x] Mode swipe avec gestes natifs
-- [x] Intégration Spotify API
-- [x] Persistance des favoris
-- [x] Statistiques utilisateur
-- [x] Interface premium
-
-### 🔨 Phase 2 - Expérience Utilisateur (En cours)
-- [ ] Onglet Tendances (Top Charts)
-- [ ] Navigation par genres
-- [ ] Système de recherche
-- [ ] Recommandations personnalisées
-- [ ] Partage social
-
-### 🎯 Phase 3 - Fonctionnalités Avancées
-- [ ] Intégration YouTube (previews vidéo)
-- [ ] Onglet Concerts (Bandsintown API)
-- [ ] Filtres géographiques
-- [ ] Mode hors ligne
-- [ ] Notifications push
-
-### 🌐 Phase 4 - Backend & Comptes
-- [ ] Backend Node.js/Express
-- [ ] Base de données PostgreSQL/Supabase
-- [ ] Authentification utilisateur
-- [ ] Synchronisation multi-appareils
-- [ ] Espace PRO (via Airtable)
-
-### 📱 Phase 5 - Publication
-- [ ] Build production (EAS)
-- [ ] Publication App Store
-- [ ] Publication Google Play
-- [ ] Landing page marketing
-- [ ] Analytics utilisateur
-
----
-
-## 🤝 Contribution
-
-Les contributions sont les bienvenues ! Voici comment participer :
-
-1. **Fork** le projet
-2. **Créer** une branche feature (`git checkout -b feature/AmazingFeature`)
-3. **Commit** vos changements (`git commit -m 'Add some AmazingFeature'`)
-4. **Push** vers la branche (`git push origin feature/AmazingFeature`)
-5. **Ouvrir** une Pull Request
 
 ### Standards de code
 - TypeScript strict
@@ -469,23 +414,6 @@ Les contributions sont les bienvenues ! Voici comment participer :
 ## 📝 License
 
 Ce projet est sous licence **MIT** - voir le fichier [LICENSE](LICENSE) pour plus de détails.
-
----
-
-## 👨‍💻 Auteur
-
-**Chouaib**
-- GitHub: [@votre-username](https://github.com/votre-username)
-- Email: votre.email@example.com
-
----
-
-## 🙏 Remerciements
-
-- **Spotify Web API** pour les données musicales
-- **Expo** pour la plateforme de développement
-- **React Native** pour le framework mobile
-- Inspiré par **Shotgun** et **Tinder** pour l'UX
 
 ---
 
