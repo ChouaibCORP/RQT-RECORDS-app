@@ -27,9 +27,13 @@ export class SpotifyService {
     });
     
     const data = await response.json();
+    console.log('🔑 Spotify auth response:', JSON.stringify(data));
+    if (!data.access_token) {
+      throw new Error(`Auth failed: ${JSON.stringify(data)}`);
+    }
     this.accessToken = data.access_token;
-    this.tokenExpiry = now + (data.expires_in * 1000) - 60000; // 1 minute before expiry
-    
+    this.tokenExpiry = now + (data.expires_in * 1000) - 60000;
+
     return this.accessToken!;
   }
 
@@ -38,7 +42,7 @@ export class SpotifyService {
       const token = await this.getAccessToken();
       
       const response = await fetch(
-        `https://api.spotify.com/v1/browse/new-releases?limit=${limit}&country=${country}`,
+        `https://api.spotify.com/v1/search?q=tag:new&type=album&limit=${limit}&market=${country}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -46,9 +50,11 @@ export class SpotifyService {
           }
         }
       );
-      
-      const data = await response.json();
-      
+
+      const text = await response.text();
+      console.log('📦 Search response status:', response.status, text.slice(0, 300));
+      const data = JSON.parse(text);
+
       if (data.albums && data.albums.items) {
         return data.albums.items.map((album: any) => {
           // Sélectionner la meilleure qualité d'image disponible
